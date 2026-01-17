@@ -250,13 +250,29 @@ start_wireguard() {
 configure_firewall() {
     log_info "Configuring firewall..."
     
-    # Allow WireGuard port
-    if command -v ufw &> /dev/null; then
-        ufw allow ${WG_PORT}/udp > /dev/null 2>&1 || true
+    # Allow WireGuard port via iptables
+    iptables -A INPUT -p udp --dport ${WG_PORT} -j ACCEPT 2>/dev/null || true
+    iptables -A INPUT -p tcp --dport ${WG_PORT} -j ACCEPT 2>/dev/null || true
+    
+    # Save iptables rules if possible
+    if command -v iptables-save &> /dev/null; then
+        if [[ -d /etc/iptables ]]; then
+            iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
+        elif [[ -f /etc/sysconfig/iptables ]]; then
+            iptables-save > /etc/sysconfig/iptables 2>/dev/null || true
+        fi
     fi
     
+    # Also configure UFW if available
+    if command -v ufw &> /dev/null; then
+        ufw allow ${WG_PORT}/udp > /dev/null 2>&1 || true
+        ufw allow ${WG_PORT}/tcp > /dev/null 2>&1 || true
+    fi
+    
+    # Also configure firewalld if available
     if command -v firewall-cmd &> /dev/null; then
         firewall-cmd --permanent --add-port=${WG_PORT}/udp > /dev/null 2>&1 || true
+        firewall-cmd --permanent --add-port=${WG_PORT}/tcp > /dev/null 2>&1 || true
         firewall-cmd --reload > /dev/null 2>&1 || true
     fi
     
